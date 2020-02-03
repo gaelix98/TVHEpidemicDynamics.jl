@@ -1,0 +1,7 @@
+name = "TVHEpidemicDynamics"
+uuid = "f6ff16cc-4662-11ea-1f99-dbcb41fb6886"
+authors = ["aleant93 <aless.antelmi@gmail.com>"]
+version = "0.1.0"
+
+[deps]
+Revise = "295af30f-e4ad-537b-8983-00126c2a3abe"
