@@ -35,6 +35,7 @@ function TVHSIS(
         he_index_map,
         Δ,
         δ;
+        path="",
         mytitle = "",
         vstatus = nothing,
         per_infected = 20,
@@ -60,7 +61,7 @@ function TVHSIS(
         fname = "AAMAS/results/1year-Δ:$(Δ)-perinfected:$(per_infected)-c:median-τₕ:$(τₕ)-τᵥ:$(τᵥ)-γₕ:$(γₕ)-γᵥ:$(γᵥ)-αᵥ:$(αᵥ)-βᵥ:$(βᵥ).csv"
     else
         #fname = "AAMAS/results/tokyo/hg/1year-Δ:$(Δ)-perinfected:$(per_infected)-c:$(c)-τₕ:$(τₕ)-τᵥ:$(τᵥ)-γₕ:$(γₕ)-γᵥ:$(γᵥ)-αᵥ:$(αᵥ)-βᵥ:$(βᵥ)-αᵥ:$(αₑ)-βᵥ:$(βₑ).csv"
-        fname = "src/experiments/results/53/csv/$(mytitle).csv"
+        fname = "$(path)$(Base.Filesystem.path_separator)$(mytitle).csv"
     end
 
     #hgs = Array{Any, 1}()
