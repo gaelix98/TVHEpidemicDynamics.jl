@@ -1,74 +1,64 @@
 """
-
+Creates a hypergraph from a dataset of checkins.
 """
 
 
 """
-
+Loads a dataframe from a file 'fname' containing checkin-data.
+For each checkin stores user and place in two dictionaries.
+Creates a dictionary of time intervals describing the evolution of the relationships
+between users and places.
 """
-function buildparamsdirect(
-    fname::AbstractString,
+function buildparamsdirect(fname::AbstractString,
     columns::AbstractVector,
     dateformat::AbstractString;
     Δ::Millisecond = Dates.Millisecond(14400000),
     δ::Millisecond = Dates.Millisecond(1000),
     limit::Int = typemax(Int),
-    datelimit::Union{DateTime, Nothing} = nothing,
-    mindatelimit::Union{DateTime, Nothing} = nothing
-    )
+    mindate::Union{DateTime,Nothing} = nothing,
+    maxdate::Union{DateTime,Nothing} = nothing)
 
-    df = CSV.read(
-        fname;
-        copycols=true,
-        header=columns,
-        dateformat=dateformat,
-        limit=limit)
-
-    # df = CSV.read(fname;
-    #     copycols=true, header=[:userid, :UTCtime, :lat, :lng, :venueid],
-    #     dateformat="y-m-dTH:M:SZ", #e u d H:M:S +0000 Y
-    #     limit=limit)
+    df = CSV.read(fname;
+    copycols = true,
+    header = columns,
+    dateformat = dateformat,
+    limit = limit)
 
     df = dropmissing(df, :UTCtime)
-
-    #println(size(df))
-
-    if datelimit != nothing
-        df = filter(r -> r.UTCtime <= datelimit, df)
-    end
-
-    if mindatelimit != nothing
-        df = filter(r -> r.UTCtime >= mindatelimit, df)
-    end
-
+    df = filter(r->(mindate === nothing || r.UTCtime >= mindate) &&
+    (maxdate === nothing || r.UTCtime <= maxdate), df)
     sort!(df, :UTCtime)
 
-    #vertices
+    # vertices
     users = unique(df, :userid)
-    nusers = nrow(users)
+    numusers = nrow(users)
 
-    #hyperedges - upper buond
+    # hyperedges - upper buond
     places = unique(df, :venueid)
-    nplaces = nrow(places)
+    numplaces = nrow(places)
 
-    #time slots
-    nintervals = ceil(Int,(maximum(df[!, :UTCtime]) - minimum(df[!, :UTCtime]))/Δ)
-    intervals = Dict{Int, Pair{DateTime, DateTime}}()
-
-    #evaluate timeframes
+    # time slots
     mintime = minimum(df[!, :UTCtime])
-    for i=1:nintervals
-        offset = mintime + Δ + δ > maximum(df[!, :UTCtime]) ?  maximum(df[!, :UTCtime]) + Dates.Millisecond(1) :  mintime + Δ + δ
-        #get!(intervals, i, Pair{DateTime, DateTime}(convert(Dates.DateTime, (mintime-delta)), convert(Dates.DateTime, (offset+delta))))
-        get!(intervals, i, Pair{DateTime, DateTime}(convert(Dates.DateTime, (mintime - δ)), convert(Dates.DateTime, (offset))))
+    maxtime = maximum(df[!, :UTCtime])
+
+    nintervals = ceil(Int, (maxtime - mintime) / Δ)
+    intervals = Dict{Int,Pair{DateTime,DateTime}}()
+
+    # evaluate timeframes
+    for i = 1:nintervals
+        offset = mintime + Δ + δ > maxtime ? maxtime + Dates.Millisecond(1) :
+        mintime + Δ + δ
+        get!(intervals, i, Pair{DateTime,DateTime}(convert(Dates.DateTime,
+        (mintime - δ)), convert(Dates.DateTime, (offset))))
 
         mintime = offset - δ
     end
 
-    #mapping node -> user
-    node_index_map = Dict{String, Int}()
+    # mapping node -> user
+    node_index_map = Dict{String,Int}()
     index = 1
-    #add vertices
+
+    # add vertices
     for user in eachrow(users)
         userid = string(user[:userid])
         if !haskey(node_index_map, userid)
@@ -77,10 +67,10 @@ function buildparamsdirect(
         end
     end
 
-    #mapping he -> place
-    he_index_map = Dict{String, Int}()
+    # mapping he -> place
+    he_index_map = Dict{String,Int}()
     index = 1
-    #add he
+    # add he
     for place in eachrow(places)
         placeid = string(place[:venueid])
         if !haskey(he_index_map, placeid)
@@ -89,109 +79,83 @@ function buildparamsdirect(
         end
     end
 
-    #println(node_index_map)
-    #println(he_index_map)
-
     df, intervals, node_index_map, he_index_map
 end
 
 
 """
-
+Returns a hypergraph for a given set of vertices and hyperedges based on the time
+parameters.
 """
-function buildhg(
-    df,
+function buildhg(df,
     mindate,
     maxdate,
-    delta,
+    δ,
     node_index_map,
-    he_index_map
-    )
+    he_index_map)
 
-    prevdf = filter(r -> ((r.UTCtime >= mindate-delta) && (r.UTCtime < (mindate))), df)
-    currdf = filter(r -> ((r.UTCtime >= (mindate)) && (r.UTCtime < (maxdate))), df)
-    nextdf = filter(r -> ((r.UTCtime >= (maxdate))) && (r.UTCtime < maxdate+delta), df)
+    prevdf = filter(r->((r.UTCtime >= mindate - δ) && (r.UTCtime < mindate)), df)
+    currdf = filter(r->((r.UTCtime >= mindate) && (r.UTCtime < maxdate)), df)
+    nextdf = filter(r->((r.UTCtime >= maxdate)) && (r.UTCtime < maxdate + δ), df)
 
     if size(currdf)[1] == 0
         return nothing
     end
 
-    if size(prevdf)[1] != 0
-        toadd_p = enrichdf(currdf, prevdf, delta)
-        for r in toadd_p
-            push!(currdf, r)
-        end
-    end
-    if size(nextdf)[1] != 0
-        toadd_n = enrichdf(currdf, nextdf, delta)
-        for r in toadd_n
-            push!(currdf, r)
-        end
-    end
+    enrichdf(prevdf, currdf, δ)
+    enrichdf(nextdf, currdf, δ)
 
-    h = Hypergraph{Int, String, String}(length(keys(node_index_map)), length(keys(he_index_map)))
-
-    for user in node_index_map
-        set_vertex_meta!(h, user.first, user.second)
-        #println(user.first, "=>", user.second)
-    end
-
-    for place in he_index_map
-        set_hyperedge_meta!(h, place.first, place.second)
-        #println(place.first, "=>", place.second)
-    end
-
-    for checkin in eachrow(currdf)
-        # se un utente visita lo stesso luogo nello stesso timeframe?
-        # viene memorizzato il timestamp dell'ultima volta che lo visita
-        setindex!(h, Dates.value(checkin.UTCtime), get(node_index_map, string(checkin.userid), -1), get(he_index_map, checkin.venueid, -1))
-    end
-
+    h = inithg(currdf, node_index_map, he_index_map)
     h
 end
 
 
 """
-
+Adds every checkin 'c1' in 'df1' to 'df2' if any checkin 'c2' in 'df2' has been
+made in the same place of 'c1' and in a close period of time
 """
-function enrichdf(df1, df2, delta)
-    toreturn = Array{Any, 1}()
+function enrichdf(df1, df2, δ)
+    toadd = Array{Any,1}()
 
-    for r1 in eachrow(df2)
-        for r2 in eachrow(df1)
-            if (r1.venueid == r2.venueid) && (abs(r1.UTCtime - r2.UTCtime) < delta)
-                push!(toreturn, r1)
+    for r1 in eachrow(df1)
+        for r2 in eachrow(df2)
+            if (r1.venueid == r2.venueid) && (abs(r1.UTCtime - r2.UTCtime) < δ)
+                push!(toadd, r1)
             end
         end
     end
 
-    toreturn
+    for row in toadd
+        push!(df2, row)
+    end
 end
 
 
 """
+Returns a hypergraph for a given set of vertices and hyperedges specifying the
+number of new nodes
 """
-function generatehg(h, df, mindate, maxdate, node_index_map, he_index_map, t, all, usersepoc)
+function generatehg(h,
+    df,
+    mindate,
+    maxdate,
+    node_index_map,
+    he_index_map,
+    t,
+    all,
+    usersepoc)
+
     added = 0
     moved = 0
-
     vadded = rand(0:0, 1, length(keys(node_index_map)))
 
-    #initialize hg
-    if h == nothing
-        h = Hypergraph{Int, String, String}(length(keys(node_index_map)), length(keys(he_index_map)))
+    currdf = filter(r->((r.UTCtime >= mindate) && (r.UTCtime < maxdate)), df)
 
-        for user in node_index_map
-            set_vertex_meta!(h, user.first, user.second)
-            #println(user.first, "=>", user.second)
-        end
-
-        for place in he_index_map
-            set_hyperedge_meta!(h, place.first, place.second)
-            #println(place.first, "=>", place.second)
-        end
+    # initialize hg
+    if h === nothing
+        h = inithg(currdf, node_index_map, he_index_map)
     else
-        for v_index=1:nhv(h)
+        for v_index = 1:nhv(h)
             max = 0
             id = 0
             for he in gethyperedges(h, v_index)
@@ -207,32 +171,44 @@ function generatehg(h, df, mindate, maxdate, node_index_map, he_index_map, t, al
         end
     end
 
-    currdf = filter(r -> ((r.UTCtime >= (mindate)) && (r.UTCtime < (maxdate))), df)
-
     for checkin in eachrow(currdf)
-        #if the user was not in any other venue, ie hyperedge, it is a new node
-        #hg_userid = get(node_index_map, string(checkin.userid), -1))
-        if usersepoc[get(node_index_map, string(checkin.userid), -1)] == 0
-            added += 1
-            usersepoc[get(node_index_map, string(checkin.userid), -1)] = 1
-        else
-            moved += 1
-        end
+        # if the user was not in any other venue, ie hyperedge, it is a new node
+        usersepoc[get(node_index_map, string(checkin.userid), -1)] == 0 ?
+        usersepoc[get(node_index_map, string(checkin.userid), -1)] = 1 : moved += 1
 
-        # se un utente visita lo stesso luogo nello stesso timeframe?
-        # viene memorizzato il timestamp dell'ultima volta che lo visita
-
+        # if a user visits the same place in the same timeframe
+        # the timestamp of the last time he visits it is stored
         if t == 1 || all
-            # try
-            setindex!(h, Dates.value(checkin.UTCtime), get(node_index_map, string(checkin.userid), -1), get(he_index_map, string(checkin.venueid), -1))
-            # catch e
-            #     println(checkin.userid, "-->", get(node_index_map, string(checkin.userid), -1), "    ",
-            #         checkin.venueid, "-->", get(he_index_map, checkin.venueid, -1), "    ", size(h))
-            #     showerror(stdout, e)
-            #     println()
-            # end
+            setindex!(h, Dates.value(checkin.UTCtime), get(node_index_map,
+            string(checkin.userid), -1), get(he_index_map, string(checkin.venueid), -1))
         end
     end
-    h, added, moved
+    added = size(currdf)[1] - moved
 
+    h, added, moved
+end
+
+"""
+Creates a hypergraph from a dataframe of checkins for a given set of vertices and
+hyperedges
+"""
+function inithg(df, node_index_map, he_index_map)
+    h = Hypergraph{Int,String,String}(length(keys(node_index_map)), length(keys(he_index_map)))
+
+    for user in node_index_map
+        set_vertex_meta!(h, user.first, user.second)
+    end
+
+    for place in he_index_map
+        set_hyperedge_meta!(h, place.first, place.second)
+    end
+
+    for checkin in eachrow(df)
+        # if a user visits the same place in the same timeframe
+        # the timestamp of the last time he visits it is stored
+        setindex!(h, Dates.value(checkin.UTCtime), get(node_index_map,
+        string(checkin.userid), -1), get(he_index_map, checkin.venueid, -1))
+    end
+
+    h
 end
