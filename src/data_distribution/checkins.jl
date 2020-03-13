@@ -1,4 +1,19 @@
-using TVHEpidemicDynamics
+
+using CSV
+using DataFrames
+using Dates
+using SimpleHypergraphs
+
+export evaluateintervals!, evaluatedensity!
+export evaluatedistance!, evaluate_direct_contacts_distribution!
+export evaluate_location_distribution!
+
+export buildparamsdirect, buildhg, generatehg
+export TVHSIS
+
+include("helper.jl")
+include("epidemics/TVH.jl")
+include("epidemics/TVHSIS.jl")
 using DataFrames
 using CSV
 using Dates
@@ -10,7 +25,7 @@ using Statistics
  within the same place, considering only direct contact.
 """
 
-dataset = "data/dataset_TSMC2014_TKY.txt"
+dataset = "C:/Users/Utente/Documents/GitHub/TVHEpidemicDynamics.jl/src/data_distribution/dataset_TSMC2014_TKY.txt"
 header = [:userid, :venueid, :catid, :catname, :lat, :lng, :timezoneoffset, :UTCtime]
 dateformat = "e u d H:M:S +0000 Y" #y-m-dTH:M:SZ
 
@@ -27,7 +42,7 @@ mindate = minimum(df[!, :UTCtime])
 #evaluating data starting from the first monday
 #minMonday = 2012-04-09T18:17:18
 #minmonday = Dates.DateTime("2012-04-09T18:17:18")
-minmonday = Dates.DateTime("2012-04-09T00:00:00")
+minmonday = Dates.DateTime("2012-05-09T00:00:00")
 mintime = minmonday
 
 
@@ -114,7 +129,7 @@ gcf()
 
 plt.tight_layout(.5)
 
-savefig("src/data_distribution/plots/checkin_distribution.png")
+savefig("src/data_distribution/plots/checkin_distributiontest.png")
 
 
 
