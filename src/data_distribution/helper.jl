@@ -30,6 +30,15 @@ function evaluatedensity!(intervals, checkinperinterval, df)
     end
 end
 
+function evaluatedensityGAETANO!(intervals, checkinperinterval, df)
+    for interval in intervals
+        currdf = filter(r -> ((r.UTCtime >= (interval.second.first)) && (r.UTCtime < (interval.second.second))),(df))
+        push!(
+            checkinperinterval,
+            interval.first => size(currdf)[1])
+    end
+end
+
 
 
 """
