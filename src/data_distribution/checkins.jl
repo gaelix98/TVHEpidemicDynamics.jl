@@ -129,7 +129,7 @@ gcf()
 
 plt.tight_layout(.5)
 
-savefig("src/data_distribution/plots/checkin_distributiontest.png")
+savefig("src/data_distribution/plots/checkin_distribution.png")
 
 
 
