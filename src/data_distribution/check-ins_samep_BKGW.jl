@@ -125,8 +125,6 @@ gcf()
 
 plt.tight_layout(.5)
 
-savefig("src/data_distribution/plots/checkin_distributionBK.png")
-
 toplot = Vector{Array{Any,1}}()
 cut = 0
 
@@ -166,7 +164,7 @@ gcf()
 
 plt.tight_layout(.5)
 
-savefig("src/data_distribution/plots/directcontacts_distributionBK1.png")
+savefig("src/data_distribution/plots/checkin_distributionBK.png.png")
 
 dataset = "C:/Users/Utente/Documents/GitHub/TVHEpidemicDynamics.jl/src/data_distribution/Gowalla_totalCheckins.txt"
 header = [:userid, :UTCtime, :lat, :lng,:venueid]
@@ -274,7 +272,7 @@ gcf()
 
 plt.tight_layout(.5)
 
-savefig("src/data_distribution/plots/checkin_distributionGW.png")
+
 toplot = Vector{Array{Any,1}}()
 cut = 0
 
@@ -314,4 +312,4 @@ gcf()
 
 plt.tight_layout(.5)
 
-savefig("src/data_distribution/plots/directcontacts_distributionGW!.png")
+savefig("src/data_distribution/plots/checkin_distributionGW.png.png")
