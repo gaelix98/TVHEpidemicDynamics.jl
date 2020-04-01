@@ -4,7 +4,7 @@ Creates a hypergraph from a dataset of checkins.
 
 
 """
-Loads a dataframe from a file 'fname' containing checkin-data.
+Loads a dataframe from a file `fname` containing checkin-data.
 For each checkin stores user and place in two dictionaries.
 Creates a dictionary of time intervals describing the evolution of the relationships
 between users and places.
@@ -25,8 +25,8 @@ function buildparamsdirect(fname::AbstractString,
     limit = limit)
 
     df = dropmissing(df, :UTCtime)
-    df = filter(r->(mindate === nothing || r.UTCtime >= mindate) &&
-    (maxdate === nothing || r.UTCtime <= maxdate), df)
+    df = filter(r->(isnothing(mindate) || r.UTCtime >= mindate) &&
+                    (isnothing(maxdate) || r.UTCtime <= maxdate), df)
     sort!(df, :UTCtime)
 
     # vertices
@@ -102,8 +102,8 @@ function buildhg(df,
         return nothing
     end
 
-    enrichdf(prevdf, currdf, δ)
-    enrichdf(nextdf, currdf, δ)
+    enrichdf!(prevdf, currdf, δ)
+    enrichdf!(nextdf, currdf, δ)
 
     h = inithg(currdf, node_index_map, he_index_map)
     h
@@ -111,10 +111,10 @@ end
 
 
 """
-Adds every checkin 'c1' in 'df1' to 'df2' if any checkin 'c2' in 'df2' has been
-made in the same place of 'c1' and in a close period of time
+Adds every checkin `c1` in `df1` to `df2` if any checkin `c2` in `df2` has been
+made in the same place of `c1` and in a close period of time
 """
-function enrichdf(df1, df2, δ)
+function enrichdf!(df1, df2, δ)
     toadd = Array{Any,1}()
 
     for r1 in eachrow(df1)
@@ -152,7 +152,7 @@ function generatehg(h,
     currdf = filter(r->((r.UTCtime >= mindate) && (r.UTCtime < maxdate)), df)
 
     # initialize hg
-    if h === nothing
+    if isnothing(h)
         h = inithg(currdf, node_index_map, he_index_map)
     else
         for v_index = 1:nhv(h)
