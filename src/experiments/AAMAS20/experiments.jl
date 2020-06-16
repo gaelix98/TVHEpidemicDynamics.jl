@@ -5,7 +5,10 @@ using PyPlot
 using Statistics
 
 """
-    Experiment of section 5.3 of the paper
+    Experiments from sections 5.3 and 5.4 of the paper
+    *A Design-Methodology for Epidemic Dynamics via Time-Varying Hypergraphs*
+        - 5.3 Direct vs indirect contagions
+        - 5.4 Modeling the effect of time
 """
 
 #########################
@@ -13,7 +16,13 @@ using Statistics
 ########################
 
 # Simulation parameters
-fparams = "src/experiments/configs/53/aamas53.csv"
+# Section 5.3 - Direct vs Indirect contagions
+fparams = "src/experiments/AAMAS20/configs/53/aamas53.csv"
+output_path = "src/experiments/AAMAS20/results/53"
+
+# Section 5.4 - Modeling the effect of time
+#fparams = "src/experiments/AAMAS20/configs/54/aamas54.csv"
+#output_path = "src/experiments/AAMAS20/results/54"
 
 paramsdf = CSV.read(
             fparams;
@@ -110,7 +119,7 @@ end
 #########################
 # Simulation
 ########################
-simulation_data = Dict{String, Array{Pair{String, Array{Float64, 1}}, 1}}()
+simulation_data = Dict{String, Array{Pair{String, NamedTuple}, 1}}()
 
 for testtype in keys(test_data)
     for test in get(test_data, testtype, nothing)
@@ -139,15 +148,15 @@ for testtype in keys(test_data)
                 γₑ = test[:γₑ], 
                 γₐ = test[:γₐ],
                 niter = 1,
-                output_path = "src/experiments/results/53/csv/$(test[:exp_id])_$(test[:data])_$(Dates.format(now(), "Y-mm-ddTHH-MM-SS")).csv"
+                output_path = "$(output_path)/csv/$(test[:exp_id])_$(test[:data])_$(Dates.format(now(), "Y-mm-ddTHH-MM-SS")).csv"
             )
 
         # get the average over all iterations 
         infected_distribution = mean(collect(values(SIS_per_infected_sim)))
 
         push!(
-            get!(simulation_data, testtype, Array{Dict{String, Array{Float64, 1}}, 1}()),
-            test[:label] => infected_distribution
+            get!(simulation_data, testtype, Array{Dict{String, NamedTuple}, 1}()),
+            test[:label] => (infected_distribution = infected_distribution, Δ = test[:Δ], δ = test[:δ])
         ) 
     end
 end
@@ -170,10 +179,11 @@ for test_type in keys(simulation_data)
    
     for exp in get!(simulation_data, test_type, Array{Float64, 1}())        
         ylim(bottom=0.0, top=0.6)
-        plot(exp.second, linestyle=linestyles[linestyle], marker=markers[marker], markevery=10, markersize=6.5)
+        plot(exp.second.infected_distribution, linestyle=linestyles[linestyle], marker=markers[marker], markevery=10, markersize=6.5)
 
-        ylabel("Infected nodes in %", fontweight="semibold", fontsize="x-large", labelpad=10)
         xlabel("Time intervals", fontweight="semibold", labelpad=10, fontsize="x-large")
+        ylabel("Δ = $(exp.second.Δ) hours \n Infected nodes in %", fontweight="semibold", fontsize="x-large", labelpad=10)
+        title("δ = $(exp.second.δ) minutes", pad=10, fontweight="semibold", fontsize="x-large")
 
         tick_params(labelsize="large")
 
@@ -191,7 +201,7 @@ for test_type in keys(simulation_data)
     end
     legend(labels, fontsize="large", ncol=2)
     plt.tight_layout(.5)
-    savefig("src/experiments/results/53/plot/$(mytitle)")
+    savefig("$(output_path)/plot/$(mytitle)")
 end
 
 gcf()
