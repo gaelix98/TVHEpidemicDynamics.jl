@@ -1,10 +1,13 @@
 """
-Returns number of infected indiduals in a given location (hyperedge)
+    infected(h, he, vstatus, istatus)
+
+Count the number of infected nodes within an hyperedge. 
 """
 function infected(h, he, vstatus, istatus)
     vertices = getvertices(h, he)
     sum = 0
     for v in vertices
+        # if the node is not immunized
         if istatus[v.first] == 0
             sum += vstatus[v.first]
         end
@@ -14,232 +17,273 @@ end
 
 
 """
-Regularizes the number of infected individuals
+    f(num_infected, c)
+
+Non-linear function used to bound the infection pressure 
+for large values of 𝑛.
 """
-function f(ninfected, c)
-    ninfected > c ? c : ninfected
+function f(num_infected, c)
+    num_infected > c ? c : num_infected
 end
 
 
 """
-Simulation process on TVH for the SIS model, considering direct and indirect contacts
-between individuals and locations.
+
 """
 function TVHSIS(
-    df,
-    intervals,
-    node_index_map,
-    he_index_map,
-    Δ,
-    δ;
-    path = "",
-    mytitle = "",
-    vstatus = nothing,
-    per_infected = 20,
-    c = 12,
-    τd = 0.2,
-    τₕ = 0.2,
-    τᵥ = 0.20,
-    γₕ = 0.05,
-    γᵥ = 0.05,
-    αᵥ = 0.05,
-    βᵥ = 0.0,
-    αₑ = 0.05,
-    βₑ = 0.0,
-    ntrials = 1,
-    immunizenode = false,
-    immunizeedge = false
-    )
+        df::DataFrame,
+        intervals::Dict{Int, Pair{DateTime, DateTime}},
+        node_index_map::Dict{String, Int},
+        he_index_map::Dict{String, Int},
+        δ::Dates.Millisecond;
+        Δ::Union{Int,TimePeriod,Nothing} = nothing,
+        vstatus::Union{Array{Int, 1}, Nothing} = nothing,
+        per_infected::Int = 20,
+        c::Union{Int, Nothing} = 5,
+        βd::Float64 = 0.2,
+        βₑ::Float64 = 0.06,
+        βᵢ::Float64 = 0.1,
+        γₑ::Float64 = 0.06,
+        γₐ::Float64 = 0.1,
+        niter::Int = 1,
+        output_path::Union{AbstractString, Nothing} = nothing
+)
 
-    per_infected_sim = Dict{Int,Array{Float64,1}}()
-    per_infected_sim_trials = Dict{Int,Array{Float64,1}}()
+    if isnothing(output_path)
+        if !isdir("results/")
+            Filesystem.mkdir("results/")
+        end
 
-    isnothing(c) ? fname = "AAMAS/results/1year-Δ:$(Δ)-perinfected:$(per_infected)-c:median-τₕ:$(τₕ)-τᵥ:$(τᵥ)-γₕ:$(γₕ)-γᵥ:$(γᵥ)-αᵥ:$(αᵥ)-βᵥ:$(βᵥ).csv" : "$(path)$(Base.Filesystem.path_separator)$(mytitle).csv"
+        output_path = "results/$(Dates.format(now(), "Y-mm-ddTHH-MM-SS")).csv"
+    end
 
-    open(fname, "a") do fhandle
+    # iter -> percentage of infected users per simulation step
+    to_return = Dict{Int, Array{Float64, 1}}()
+
+    open(output_path, "a") do fhandle
         write(
-        fhandle,
-        "time,delta,newusers,movedusers,c,td,th,tv,gh,gv,aq,bq,aeq,beq,density
-        ,avg_degree,perc_tot_infected,tot_he_infected,tot_he_infected_1\n")
+            fhandle,
+            string(
+                "sim_step,Δ,δ,c,per_infected,βd,βₑ,βᵢ,γₑ,γₐ,avg_he_size,avg_degree,avg_direct_contacts,",
+                "new_users,moved_users,perc_infected_users,perc_infected_locations\n"
+                )
+        )
 
-        for trial = 1:ntrials
-            println(trial)
+        # for randomization purposes
+        for iter=1:niter
+            println("Iter $(iter)")
 
-            # random status initialization
             h = nothing
             added, moved = 0, 0
 
-            numnodes = length(keys(node_index_map))
-            numhe = length(keys(he_index_map))
-            usersepoc = rand(0:0, 1, numnodes)
+            # percentage of infected per simulation step
+            per_infected_sim = Array{Float64, 1}()
 
+            # store which users are present in the given timeframe
+            usersepoc = zeros(Int, length(keys(node_index_map)))
+
+            # evaluation of an initial vector of infected users
+            # if it is not given as input 
             if isnothing(vstatus)
-                vstatus = rand(1:1, 1, numnodes)
-                vrand = rand(0:100, 1, numnodes)
-                for i = 1:numnodes
+                vstatus = fill(1, length(keys(node_index_map)))
+                vrand = rand(0:100, 1, length(keys(node_index_map)))
+                for i=1:length(keys(node_index_map))
                     if per_infected  <= vrand[i]
                         vstatus[i] = 0
                     end
                 end
             end
-            hstatus = rand(0:0, 1, numhe)
 
-            # immunization
-            istatus = rand(0:0, 1, numnodes)
-            irand = rand(0:100, 1, numnodes)
+            # Initially, all location are safe
+            hestatus = zeros(Int, length(keys(he_index_map)))
 
-            ihestatus = rand(0:0, 1, numhe)
-            iherand = rand(0:100, 1, numhe)
+            # Storing the new status of each vertex and hyperedge
+            vnextstatus = copy(vstatus)
+            henextstatus = copy(hestatus)
 
-            vnextstatus = zeros(Int64, 1, numnodes)
-            nextistatus = zeros(Int64, 1, numnodes)
+            #! check after immunization
+            push!(per_infected_sim, sum(vstatus) / length(vstatus))
 
-            henextstatus = zeros(Int64, 1, numnodes)
-            nextihestatus = zeros(Int64, 1, numhe)
+            #immunization
+            # TODO immunization policies
+            istatus = rand(0:0, 1, length(keys(node_index_map)))
+            irand = rand(0:100, 1, length(keys(node_index_map)))
 
-            push!(
-                get!(per_infected_sim, 0, Array{Float64,1}()),
-                sum(vstatus) / length(vstatus))
+            ihestatus = rand(0:0, 1, length(keys(he_index_map)))
+            iherand = rand(0:100, 1, length(keys(he_index_map)))
 
-            push!(
-                get!(per_infected_sim_trials, 0, Array{Float64,1}()),
-                sum(vstatus) / length(vstatus))
+            nextistatus = copy(istatus)
+            nextihestatus = copy(ihestatus)
 
-            # simulate
-            for t = 1:length(intervals)
-                h, a, m = generatehg(h, df, get(intervals, t, 0).first, get(intervals, t, 0).second, node_index_map, he_index_map, t, true, usersepoc)
+            ################
+            # SIMULATION
+            ################
+            for t=1:length(intervals)
+                h, added, moved = generatehg(
+                                    h, 
+                                    df, 
+                                    get(intervals, t, 0).first, 
+                                    get(intervals, t, 0).second, 
+                                    node_index_map, 
+                                    he_index_map, 
+                                    usersepoc,
+                                    t  
+                                )   
 
-                if t == 200
-                    if immunizenode
-                        for i = 1:numnodes
-                            if αᵥ > irand[i] / 100
-                                nextistatus[i] = 1
-                            end
-                        end
-                    elseif immunizeedge
-                        for i = 1:numhe
-                            if αₑ > iherand[i] / 100
-                                nextihestatus[i] = 1
-                            end
-                        end
-                    end
-                end
+                isnothing(h) && continue
 
-                if isnothing(h)
-                    continue
-                end
-
-                dist = Array{Int,1}()
+                # Estimation of the parameter c
+                # based on the distribution
+                # of the hyperedge size
                 if isnothing(c)
-                    for he = 1:size(h)[2]
+                    dist = Array{Int, 1}()
+
+                    for he=1:nhe(h)
                         push!(dist, length(getvertices(h, he)))
                     end
+
                     c = median(dist)
                     println(t, " -- ", c)
                 end
 
-                # number of possibile interactions in the hypergraph
-                density = 0
-                for he = 1:size(h)[2]
-                    density += length(getvertices(h, he))
-                end
 
-                # hg avg node degree
-                avgdegree = 0
-                for v = 1:nhv(h)
-                    avgdegree += length(gethyperedges(h, v))
-                end
-                avgdegree /= length(node_index_map)
+                #################################
+                # Evaluating some stats for 
+                # the current hg
+                #################################
 
-                hstatus_greater_1 = 0
-                for he = 1:size(h)[2]
-                    if hstatus[he] == 1 && length(getvertices(h, he)) > 1
-                        hstatus_greater_1 += 1
+                # hyperedges average size 
+                avg_he_size = .0
+                for he=1:nhe(h)
+                    avg_he_size += length(getvertices(h, he))
+                end
+                avg_he_size /= nhe(h)
+
+                # nodes average degree
+                avg_degree = .0
+                for v=1:nhv(h)
+                    avg_degree += length(gethyperedges(h, v))
+                end
+                avg_degree /= nhv(h)
+
+                # number of infected locations with
+                # at least two users
+                infected_locations = 0
+                for he=1:nhe(h)
+                    if hestatus[he] == 1 && length(getvertices(h, he)) > 1
+                        infected_locations += 1
                     end
                 end
 
-                for iter = 1:1
-                    # direct influence
-                    avgdirectdegree = 0
-                    for v = 1:size(h)[1]
-                        if usersepoc[v] == 1
+                ########################
+                # DIFFUSION ALGORITHM
+                ########################
 
+                #
+                # PHASE 1 - Agent-to-Environment
+                #
+                for he=1:nhe(h)
+                    # If the location is immunized,
+                    # it cannot spread the infection anymore
+                    ihestatus[he] == 1 && continue
+
+                    # If the location has at least two users
+                    # and it is not infected, it may become contamined.
+                    if length(getvertices(h, he)) > 1 && hestatus[he] == 0
+                        i = infected(h, he, vstatus, istatus)
+                        if rand(1)[1] <  1 - ℯ ^ - (βₑ * f(i, c))
+                            # the location is contaminated
+                            henextstatus[he] = 1
+                        end
+                    elseif rand(1)[1] <  1 - ℯ ^ - γₑ
+                        # the location has been sanitized
+                        henextstatus[he] = 0
+                    end
+                end
+
+                #
+                # PHASE 2 - Agent-to-Agent
+                #
+                avg_direct_contacts = 0
+                for v=1:nhv(h)
+                    # if the user is present in the current timeframe
+                    if usersepoc[v] == 1
+                        i = 0
+                        for he in gethyperedges(h, v)
+                            for u in getvertices(h, he.first)
+                                if v != u.first
+                                    # if u and v have been together in the same place
+                                    # in a time interval less than δ
+                                    # then it counts ad a direct contact
+                                    if abs(h[v, he.first] - h[u.first, he.first]) <= δ.value
+                                        if vstatus[v] == 0
+                                            i += vstatus[u.first]
+                                        end
+                                        avg_direct_contacts += 1
+                                    end
+                                end
+                            end
+                        end
+                        # a user becomes infected according to
+                        # the following probbaility
+                        if vstatus[v] == 0 && rand(1)[1] < 1 - ℯ ^ - (βd * i)
+                            vnextstatus[v] = 1
+                        end
+                    end
+                end
+
+                avg_direct_contacts \= sum(usersepoc)
+
+
+                #
+                # PHASE 3 - Environment-to-Agent
+                #
+                for v=1:nhv(h)
+                    istatus[v] == 1 && continue
+
+                    # if the user is present in the current timeframe
+                    if usersepoc[v] == 1
+
+                        # if the user is healthy
+                        if vstatus[v] == 0
                             i = 0
                             for he in gethyperedges(h, v)
-                                for u in getvertices(h, he.first)
-                                    if v != u.first
-                                        if abs(h[v, he.first] - h[u.first, he.first]) <= δ.value
-                                            if vstatus[v] == 0
-                                                i += vstatus[u.first]
-                                            end
-                                            avgdirectdegree += 1
-                                        end
+                                if length(getvertices(h, he.first)) > 1
+                                    if ihestatus[he.first] == 0
+                                        i += hestatus[he.first]
                                     end
                                 end
                             end
-                            if vstatus[v] == 0 && rand(1)[1] < 1 - ℯ^-(τd * i)
+                            if rand(1)[1] < 1 - ℯ ^ -(βᵢ * f(i, c))
                                 vnextstatus[v] = 1
                             end
-
-                        end
-                    end
-
-                    avgdirectdegree \= sum(usersepoc)
-
-                    #
-                    # undirect influence
-                    #
-                    for he = 1:size(h)[2]
-                        if ihestatus[he] == 1
-                            continue
-                        end
-                        if length(getvertices(h, he)) > 1 && hstatus[he] == 0
-                            i = infected(h, he, vstatus, istatus)
-                            if rand(1)[1] <  1 - ℯ^- (τₕ * f(i, c))
-                                henextstatus[he] = 1
-                            end
-                        elseif rand(1)[1] <  1 - ℯ^- γₕ
-                            henextstatus[he] = 0
-                        end
-                    end
-
-                    for v = 1:size(h)[1]
-                        if istatus[v] == 1 # if individual is immunized
-                            continue
-                        end
-                        if usersepoc[v] == 1
-                            if vstatus[v] == 0
-                                i = 0
-                                for he in gethyperedges(h, v)
-                                    if length(getvertices(h, he.first)) > 1
-                                        if ihestatus[he.first] == 0
-                                            i += hstatus[he.first]
-                                        end
-                                    end
-                                end
-                                if rand(1)[1] < 1 - ℯ^-(τᵥ * f(i, c))
-                                    vnextstatus[v] = 1
-                                end
-                            elseif rand(1)[1] < 1 - ℯ^- γᵥ # healthy and out of quarentine
+                        elseif rand(1)[1] < 1 - ℯ ^ - γₐ 
+                                # the user spontaneously returns healthy
                                 vnextstatus[v] = 0
-                            end
                         end
                     end
-                    vstatus = copy(vnextstatus)
-                    istatus = copy(nextistatus)
+                end
 
-                    hstatus = copy(henextstatus)
-                    ihestatus = copy(nextihestatus)
+                vstatus = copy(vnextstatus)
+                istatus = copy(nextistatus)
 
-                    push!(
-                        get!(per_infected_sim, iter + (t - 1) * 1, Array{Float64,1}()),
-                        sum(vstatus) / (length(vstatus) - sum(istatus))
+                hestatus = copy(henextstatus)
+                ihestatus = copy(nextihestatus)
+
+                push!(per_infected_sim, sum(vstatus) / (length(vstatus) - sum(istatus)))
+
+                to_write = string(
+                    "$(t),$(Δ),$(δ),$(c),$(per_infected),$(βd),$(βₑ),$(βᵢ),$(γₑ),$(γₐ),",
+                    "$(avg_he_size),$(avg_degree),$(avg_direct_contacts),$(added),$(moved),",
+                    "$(sum(vstatus)/length(vstatus)),$(sum(hestatus)/length(hestatus))\n"
                     )
 
-                    write(fhandle, "$(t),$(Δ),$(a),$(m),$(c),$(τₕ),$(τᵥ),$(γₕ),$(γᵥ),$(αᵥ),$(βᵥ),$(αₑ),$(βₑ),$(density),$(avgdegree),$(sum(vstatus) / length(vstatus)),$(sum(hstatus)),$(hstatus_greater_1)\n")
-                end
+                write(fhandle, to_write)
             end
+
+            push!(to_return, iter=>per_infected_sim)
         end
     end
-    per_infected_sim# , hgs
+
+    to_return
 end
