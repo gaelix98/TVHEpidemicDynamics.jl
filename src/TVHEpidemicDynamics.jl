@@ -9,11 +9,14 @@ export evaluateintervals!, evaluatedensity!
 export evaluatedistance!, evaluate_direct_contacts_distribution!
 export evaluate_location_distribution!
 
-export buildparamsdirect, buildhg, generatehg
+export generate_model_data
+export buildhg, generatehg
 export TVHSIS
 
-include("helper.jl")
-include("epidemics/TVH.jl")
+include("utils/loader.jl")
+include("utils/builder.jl")
+include("utils/helper.jl")
+
 include("epidemics/TVHSIS.jl")
 
 end # module
