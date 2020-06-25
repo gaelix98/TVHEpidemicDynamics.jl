@@ -26,10 +26,10 @@ Also in this case, the timestamp of the last checkin a user did in a given locat
 already present in the simulation. Based on this vector, the number of
 newcoming users or users who just moved in another location is evaluated.
 
-`t` is the current simulation step. In combination with `all`, it can be used 
+`t` is the current simulation step. In combination with `all`, it can be used
 for debugging purposes.
 """
-function generatehg(
+function generatehg!(
     h::Union{Hypergraph, Nothing},
     df::DataFrame,
     mindate::DateTime,
@@ -47,7 +47,7 @@ function generatehg(
     # select only the current timeframe
     currdf = filter(r->((r.UTCtime >= mindate) && (r.UTCtime < maxdate)), df)
 
-    # initialize hg 
+    # initialize hg
     if isnothing(h)
         # first step of the simulation
         # initialize the hypergraph from scratch
@@ -73,7 +73,7 @@ function generatehg(
     # Repopulate the hypergraph with checkins
     # from the new timeframe
     for checkin in eachrow(currdf)
-        # if the user was not in any other venue, i.e. an hyperedge, 
+        # if the user was not in any other venue, i.e. an hyperedge,
         # then it is a new coming node
         usersepoc[get(user2vertex, string(checkin.userid), -1)] == 0 ?
             usersepoc[get(user2vertex, string(checkin.userid), -1)] = 1 : moved += 1
@@ -99,8 +99,8 @@ end
 
 """
     inithg(
-        df::DataFrame, 
-        user2vertex::Dict{String, Int}, 
+        df::DataFrame,
+        user2vertex::Dict{String, Int},
         loc2he::Dict{String, Int}
     )
 
@@ -129,7 +129,7 @@ function inithg(df::DataFrame, user2vertex::Dict{String, Int}, loc2he::Dict{Stri
         # if a user visits the same place in the same timeframe
         # only the timestamp of his/her last checkin is stored
         setindex!(
-            h, 
+            h,
             Dates.value(checkin.UTCtime),  # checkin to store
             get(user2vertex, string(checkin.userid), -1), # node id
             get(loc2he, checkin.venueid, -1) # hyperedge id
@@ -144,12 +144,14 @@ end
 Returns a hypergraph for a given set of vertices and hyperedges based on the time
 parameters.
 """
-function buildhg(df,
+function buildhg(
+    df,
     mindate,
     maxdate,
     δ,
     user2vertex,
-    loc2he)
+    loc2he
+)
 
     prevdf = filter(r->((r.UTCtime >= mindate - δ) && (r.UTCtime < mindate)), df)
     currdf = filter(r->((r.UTCtime >= mindate) && (r.UTCtime < maxdate)), df)

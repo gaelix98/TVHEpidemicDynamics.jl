@@ -10,7 +10,7 @@ export evaluatedistance!, evaluate_direct_contacts_distribution!
 export evaluate_location_distribution!
 
 export generate_model_data
-export buildhg, generatehg
+export buildhg, generatehg!
 export TVHSIS
 
 include("utils/loader.jl")

@@ -1,7 +1,7 @@
 """
     infected(h, he, vstatus, istatus)
 
-Count the number of infected nodes within an hyperedge. 
+Count the number of infected nodes within an hyperedge.
 """
 function infected(h, he, vstatus, istatus)
     vertices = getvertices(h, he)
@@ -19,7 +19,7 @@ end
 """
     f(num_infected, c)
 
-Non-linear function used to bound the infection pressure 
+Non-linear function used to bound the infection pressure
 for large values of 𝑛.
 """
 function f(num_infected, c)
@@ -33,8 +33,8 @@ end
 function TVHSIS(
         df::DataFrame,
         intervals::Dict{Int, Pair{DateTime, DateTime}},
-        node_index_map::Dict{String, Int},
-        he_index_map::Dict{String, Int},
+        user2vertex::Dict{String, Int},
+        loc2he::Dict{String, Int},
         δ::Dates.Millisecond;
         Δ::Union{Int,TimePeriod,Nothing} = nothing,
         vstatus::Union{Array{Int, 1}, Nothing} = nothing,
@@ -80,14 +80,14 @@ function TVHSIS(
             per_infected_sim = Array{Float64, 1}()
 
             # store which users are present in the given timeframe
-            usersepoc = zeros(Int, length(keys(node_index_map)))
+            usersepoc = zeros(Int, length(keys(user2vertex)))
 
             # evaluation of an initial vector of infected users
-            # if it is not given as input 
+            # if it is not given as input
             if isnothing(vstatus)
-                vstatus = fill(1, length(keys(node_index_map)))
-                vrand = rand(0:100, 1, length(keys(node_index_map)))
-                for i=1:length(keys(node_index_map))
+                vstatus = fill(1, length(keys(user2vertex)))
+                vrand = rand(0:100, 1, length(keys(user2vertex)))
+                for i=1:length(keys(user2vertex))
                     if per_infected  <= vrand[i]
                         vstatus[i] = 0
                     end
@@ -95,7 +95,7 @@ function TVHSIS(
             end
 
             # Initially, all location are safe
-            hestatus = zeros(Int, length(keys(he_index_map)))
+            hestatus = zeros(Int, length(keys(loc2he)))
 
             # Storing the new status of each vertex and hyperedge
             vnextstatus = copy(vstatus)
@@ -106,11 +106,11 @@ function TVHSIS(
 
             #immunization
             # TODO immunization policies
-            istatus = rand(0:0, 1, length(keys(node_index_map)))
-            irand = rand(0:100, 1, length(keys(node_index_map)))
+            istatus = rand(0:0, 1, length(keys(user2vertex)))
+            irand = rand(0:100, 1, length(keys(user2vertex)))
 
-            ihestatus = rand(0:0, 1, length(keys(he_index_map)))
-            iherand = rand(0:100, 1, length(keys(he_index_map)))
+            ihestatus = rand(0:0, 1, length(keys(loc2he)))
+            iherand = rand(0:100, 1, length(keys(loc2he)))
 
             nextistatus = copy(istatus)
             nextihestatus = copy(ihestatus)
@@ -119,16 +119,16 @@ function TVHSIS(
             # SIMULATION
             ################
             for t=1:length(intervals)
-                h, added, moved = generatehg(
-                                    h, 
-                                    df, 
-                                    get(intervals, t, 0).first, 
-                                    get(intervals, t, 0).second, 
-                                    node_index_map, 
-                                    he_index_map, 
+                h, added, moved = generatehg!(
+                                    h,
+                                    df,
+                                    get(intervals, t, 0).first,
+                                    get(intervals, t, 0).second,
+                                    user2vertex,
+                                    loc2he,
                                     usersepoc,
-                                    t  
-                                )   
+                                    t
+                                )
 
                 isnothing(h) && continue
 
@@ -148,11 +148,11 @@ function TVHSIS(
 
 
                 #################################
-                # Evaluating some stats for 
+                # Evaluating some stats for
                 # the current hg
                 #################################
 
-                # hyperedges average size 
+                # hyperedges average size
                 avg_he_size = .0
                 for he=1:nhe(h)
                     avg_he_size += length(getvertices(h, he))
@@ -257,7 +257,7 @@ function TVHSIS(
                             if rand(1)[1] < 1 - ℯ ^ -(βᵢ * f(i, c))
                                 vnextstatus[v] = 1
                             end
-                        elseif rand(1)[1] < 1 - ℯ ^ - γₐ 
+                        elseif rand(1)[1] < 1 - ℯ ^ - γₐ
                                 # the user spontaneously returns healthy
                                 vnextstatus[v] = 0
                         end
