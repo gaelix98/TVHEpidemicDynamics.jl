@@ -46,7 +46,7 @@ end
 # Generating model data
 ########################
 
-# Foursqaure dataset 
+# Foursqaure dataset
 dataset = "data/dataset_TSMC2014_TKY.txt"#"data/dataset_TSMC2014_TKY.txt"
 header = [:userid, :venueid, :catid, :catname, :lat, :lng, :timezoneoffset, :UTCtime]
 dateformat = "e u d H:M:S +0000 Y"
@@ -58,23 +58,26 @@ lastcheckindate = Dates.DateTime("2012-06-07T00:00:00")
 
 # The choice of the interval within which
 # either an indirect (Δ) or direct (δ) contact
-# may occur influences the data the 
+# may occur influences the data the
 # simulation is run on.
 # For this reason, it is necessary to store
-# diffent information according to the 
+# diffent information according to the
 # values of both Δ and δ.
 intervals = unique(paramsdf, [:Δ, :δ])[!, [:Δ, :δ]]
 intervals_data = Dict{String, Dict{Symbol, Any}}()
 
 for i in eachrow(intervals)
-    df, intervals, node_index_map, he_index_map =
+    df, intervals, user2vertex, loc2he =
         generate_model_data(
-            dataset, 
-            header, 
+            dataset,
+            header,
+            :userid,
+            :venueid,
+            :UTCtime,
             dateformat;
-            Δ = convert(Dates.Millisecond, Dates.Hour(i.Δ)), 
+            Δ = convert(Dates.Millisecond, Dates.Hour(i.Δ)),
             δ = convert(Dates.Millisecond, Dates.Minute(i.δ)),
-            maxdate = lastcheckindate, 
+            maxdate = lastcheckindate,
             mindate = firstcheckindate
         )
 
@@ -82,8 +85,8 @@ for i in eachrow(intervals)
         get!(intervals_data, "$(i.Δ)$(i.δ)", Dict{Symbol, Any}()),
         :df => df,
         :intervals => intervals,
-        :node_index_map => node_index_map,
-        :he_index_map => he_index_map,
+        :user2vertex => user2vertex,
+        :loc2he => loc2he,
     )
 end
 
@@ -97,7 +100,7 @@ end
 per_infected = unique(paramsdf, [:per_infected])[!, [:per_infected]]
 per_infected_data = Dict{Int, Array{Int, 1}}()
 
-users = keys(intervals_data[collect(keys(intervals_data))[1]][:node_index_map])
+users = keys(intervals_data[collect(keys(intervals_data))[1]][:user2vertex])
 
 for p in eachrow(per_infected)
     vstatus = rand(1:1, 1, length(users)) #size(unique(df, :userid))[1]
@@ -132,32 +135,32 @@ for testtype in keys(test_data)
         runningparams = get(intervals_data, "$(test[:Δ])$(test[:δ])", Dict{Symbol, Any}())
 
         SIS_per_infected_sim =
-            TVHSIS(
+            simulate(
                 get!(runningparams, :df, nothing),
                 get!(runningparams, :intervals, nothing),
-                get!(runningparams, :node_index_map, nothing),
-                get!(runningparams, :he_index_map, nothing),
+                get!(runningparams, :user2vertex, nothing),
+                get!(runningparams, :loc2he, nothing),
                 convert(Dates.Millisecond, Dates.Minute(test[:δ]));
                 Δ = test[:Δ],
                 vstatus = per_infected_data[test[:per_infected]],
-                per_infected = test[:per_infected], 
-                c = test[:c], 
+                per_infected = test[:per_infected],
+                c = test[:c],
                 βd = test[:βd],
-                βᵢ = test[:βᵢ], 
-                βₑ = test[:βₑ], 
-                γₑ = test[:γₑ], 
+                βᵢ = test[:βᵢ],
+                βₑ = test[:βₑ],
+                γₑ = test[:γₑ],
                 γₐ = test[:γₐ],
                 niter = 1,
                 output_path = "$(output_path)/csv/$(test[:exp_id])_$(test[:data])_$(Dates.format(now(), "Y-mm-ddTHH-MM-SS")).csv"
             )
 
-        # get the average over all iterations 
+        # get the average over all iterations
         infected_distribution = mean(collect(values(SIS_per_infected_sim)))
 
         push!(
             get!(simulation_data, testtype, Array{Dict{String, NamedTuple}, 1}()),
             test[:label] => (infected_distribution = infected_distribution, Δ = test[:Δ], δ = test[:δ])
-        ) 
+        )
     end
 end
 
@@ -176,8 +179,8 @@ for test_type in keys(simulation_data)
 
     clf()
     figure(figsize=(7,4))
-   
-    for exp in get!(simulation_data, test_type, Array{Float64, 1}())        
+
+    for exp in get!(simulation_data, test_type, Array{Float64, 1}())
         ylim(bottom=0.0, top=0.6)
         plot(exp.second.infected_distribution, linestyle=linestyles[linestyle], marker=markers[marker], markevery=10, markersize=6.5)
 

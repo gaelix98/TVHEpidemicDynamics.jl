@@ -30,7 +30,7 @@ end
 """
 
 """
-function TVHSIS(
+function simulate(
         df::DataFrame,
         intervals::Dict{Int, Pair{DateTime, DateTime}},
         user2vertex::Dict{String, Int},
@@ -254,10 +254,10 @@ function TVHSIS(
                                     end
                                 end
                             end
-                            if rand(1)[1] < 1 - ℯ ^ -(βᵢ * f(i, c))
+                            if rand() < 1 - ℯ ^ -(βᵢ * f(i, c))
                                 vnextstatus[v] = 1
                             end
-                        elseif rand(1)[1] < 1 - ℯ ^ - γₐ
+                        elseif rand() < 1 - ℯ ^ - γₐ
                                 # the user spontaneously returns healthy
                                 vnextstatus[v] = 0
                         end

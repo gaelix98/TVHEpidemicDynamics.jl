@@ -11,7 +11,7 @@ export evaluate_location_distribution!
 
 export generate_model_data
 export buildhg, generatehg!
-export TVHSIS
+export simulate
 
 include("utils/loader.jl")
 include("utils/builder.jl")
