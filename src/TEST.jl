@@ -2,7 +2,6 @@ using TVHEpidemicDynamics
 using Dates
 using CSV
 using PyPlot
-using DataFrames
 using Statistics
 
 """
@@ -18,8 +17,8 @@ using Statistics
 
 # Simulation parameters
 # Section 5.3 - Direct vs Indirect contagions
-fparams = "C:\\Users\\Utente\\Desktop\\tesi uni\\TVHEpidemicDynamics.jl\\src\\experiments\\AAMAS20\\configs\\53\\weplaces.csv"
-output_path = "src/experiments/AAMAS20/results/weplaces"
+fparams = "C:/Users/Utente/Desktop/tesi uni/TVHEpidemicDynamics.jl/src/experiments/AAMAS20/configs/weeplaces/weplaces.csv"
+output_path = "C:/Users/Utente/Desktop/tesi uni/TVHEpidemicDynamics.jl/src/experiments/AAMAS20/results/weplaces"
 
 # Section 5.4 - Modeling the effect of time
 #fparams = "src/experiments/AAMAS20/configs/54/aamas54.csv"
@@ -45,20 +44,17 @@ end
 
 #########################
 # Generating model data
-#########################
+########################
 
-#userid,placeid,datetime,lat,lon,city,category
-#fred-wilson,tocqueville-new-york,2010-10-22T23:44:29,40.7363,-73.9922,New York,Food:American
-#1541	4f0fd5a8e4b03856eeb6c8cb	4bf58dd8d48988d10c951735	Cosmetics Shop	35.705101088587135	139.6195900440216	540	Tue Apr 03 18:17:18 +0000 2012
 # Foursqaure dataset
-dataset = "C:\\Users\\Utente\\Desktop\\tesi uni\\TVHEpidemicDynamics.jl\\src\\weeplace_checkins.csv"#"weeplace"
+dataset = "C:\\Users\\Utente\\Desktop\\tesi uni\\TVHEpidemicDynamics.jl\\src\\weeplace_checkins.csv"#"data/dataset_TSMC2014_TKY.txt"
 header = [:userid, :venueid, :UTCtime,  :lat, :lng, :city, :category]
 dateformat = "yyyy-mm-ddTHH:MM:SS"
 
 # The simulation will consider only the data
 # within this time intervals
-firstcheckindate = Dates.DateTime("2010-05-07T00:00:00")
-lastcheckindate = Dates.DateTime("2010-06-07T00:00:00")
+firstcheckindate = Dates.DateTime("2010-07-29T00:00:00")
+lastcheckindate = Dates.DateTime("2010-08-28T00:00:00")
 
 # The choice of the interval within which
 # either an indirect (Δ) or direct (δ) contact
@@ -84,7 +80,6 @@ for i in eachrow(intervals)
             maxdate = lastcheckindate,
             mindate = firstcheckindate
         )
-    
 
     push!(
         get!(intervals_data, "$(i.Δ)$(i.δ)", Dict{Symbol, Any}()),
@@ -138,6 +133,7 @@ for testtype in keys(test_data)
         println(to_print)
 
         runningparams = get(intervals_data, "$(test[:Δ])$(test[:δ])", Dict{Symbol, Any}())
+
         SIS_per_infected_sim =
             simulate(
                 get!(runningparams, :df, nothing),
@@ -154,10 +150,9 @@ for testtype in keys(test_data)
                 βₑ = test[:βₑ],
                 γₑ = test[:γₑ],
                 γₐ = test[:γₐ],
-                niter = 6, ##numero di iterazioni
-                output_path = "$(output_path)/csv/$(test[:exp_id]).csv"
+                niter = 4,
+                output_path = "$(output_path)/csv/$(test[:exp_id])_$(test[:data])_$(Dates.format(now(), "Y-mm-ddTHH-MM-SS")).csv"
             )
-            
 
         # get the average over all iterations
         infected_distribution = mean(collect(values(SIS_per_infected_sim)))
@@ -186,7 +181,7 @@ for test_type in keys(simulation_data)
     figure(figsize=(7,4))
 
     for exp in get!(simulation_data, test_type, Array{Float64, 1}())
-        ylim(bottom=0.0, top=0.6)
+        ylim(bottom=0.0, top=0.20)
         plot(exp.second.infected_distribution, linestyle=linestyles[linestyle], marker=markers[marker], markevery=10, markersize=6.5)
 
         xlabel("Time intervals", fontweight="semibold", labelpad=10, fontsize="x-large")

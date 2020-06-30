@@ -38,6 +38,7 @@ function generate_model_data(
     maxdate::Union{DateTime,Nothing} = nothing
 )
 
+
     df = CSV.read(
         fname;
         copycols = true,
@@ -48,14 +49,18 @@ function generate_model_data(
 
     # remove all rows without a timestamp
     df = dropmissing(df, timestamp)
-
+    
+    
+    
     # filter out all the rows not in the
     # timeframe to consider
+    
     df = filter(
         r-> (isnothing(mindate) || r[timestamp] >= mindate) &&
             (isnothing(maxdate) || r[timestamp] <= maxdate),
             df
     )
+    
 
     sort!(df, [timestamp])
 

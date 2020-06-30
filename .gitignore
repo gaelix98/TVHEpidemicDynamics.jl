@@ -1,2 +1,4 @@
 data/*.txt
 data/
+src/weeplace_checkins.csv
+blocco-di-file/

@@ -10,7 +10,7 @@ using Statistics
  within the same place, considering only direct contact.
 """
 
-dataset = "data/dataset_TSMC2014_TKY.txt"
+dataset = "C:\\Users\\Utente\\Desktop\\tesi uni\\dataset_TSMC2014_TKY.txt"
 header = [:userid, :venueid, :catid, :catname, :lat, :lng, :timezoneoffset, :UTCtime]
 dateformat = "e u d H:M:S +0000 Y" #y-m-dTH:M:SZ
 
@@ -61,7 +61,7 @@ sortedcheckinsperinterval = sort(collect(checkinsperinterval), by=x->x[2], rev=t
 maxweek = get(intervals, sortedcheckinsperinterval[1].first, nothing)
 #maxweek = intervals[5]
 
-
+print(maxweek)
 """
  Studying check-in distribution
  within the most crowded week,
@@ -114,7 +114,7 @@ gcf()
 
 plt.tight_layout(.5)
 
-savefig("src/data_distribution/plots/checkin_distribution.png")
+savefig("src/data_distribution/plots/checkin_distribution5.png")
 
 
 
